@@ -174,8 +174,11 @@ public final class LuxShadows {
 
         // ---- snap the map center to the texel grid (in absolute light space) so it doesn't shimmer ----
         double texelWorld = (2.0 * radius) / size;
-        double lx = cx * right.x + cy * right.y + cz * right.z;
-        double ly = cx * lup.x + cy * lup.y + cz * lup.z;
+        double ax = Math.floor(cx / 64.0) * 64.0;
+        double ay = Math.floor(cy / 64.0) * 64.0;
+        double az = Math.floor(cz / 64.0) * 64.0;
+        double lx = (cx - ax) * right.x + (cy - ay) * right.y + (cz - az) * right.z;
+        double ly = (cx - ax) * lup.x + (cy - ay) * lup.y + (cz - az) * lup.z;
         float snapX = (float) (Math.floor(lx / texelWorld) * texelWorld - lx);
         float snapY = (float) (Math.floor(ly / texelWorld) * texelWorld - ly);
 
