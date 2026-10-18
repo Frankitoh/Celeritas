@@ -1,0 +1,30 @@
+name: build-lux-1.12.2
+on:
+  push:
+  workflow_dispatch:
+
+env:
+  CELERITAS_DISABLE_DECOMP: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            8
+            17
+            21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build 1.12.2 jar
+        run: ./gradlew -Pceleritas_target_versions=1.12.2 packageJar --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: celeritas-lux-1.12.2
+          path: build/libs/**/*.jar
