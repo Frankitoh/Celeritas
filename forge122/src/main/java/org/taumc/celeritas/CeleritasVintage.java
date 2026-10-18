@@ -40,6 +40,7 @@ public class CeleritasVintage {
 
     @EventHandler
     public void onInit(FMLInitializationEvent event) {
+           org.taumc.celeritas.lux.Lux.init();
         if ((Boolean) Launch.blackboard.get("fml.deobfuscatedEnvironment")) {
             ClientCommandHandler.instance.registerCommand(new TogglePassCommand());
         }
