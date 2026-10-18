@@ -9,8 +9,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL12;
-import org.lwjgl.opengl.GL14;
+import org.lwjgl.opengl.GL13;
 
 import java.nio.FloatBuffer;
 
@@ -87,8 +86,6 @@ public final class SunRaysRenderer {
     private static LuxProgram rayProgram;
     private static LuxProgram compositeProgram;
     private static Framebuffer raysFbo;
-    private static int depthTex = -1;
-    private static int depthW = -1, depthH = -1;
     private static boolean failed;
 
     private SunRaysRenderer() {}
@@ -170,8 +167,15 @@ public final class SunRaysRenderer {
         float sunV = ndcY * 0.5f + 0.5f;
         float aspect = fw / (float) fh;
 
+        // NOTE: GL_TEXTURE_BIT deliberately excluded from the attrib mask — saving/restoring the
+        // whole texture state is slow on old Intel/AMD drivers. The bindings we change are
+        // restored manually below; force unit 0 because the sampler reads unit 0 regardless
+        // of what vanilla left active.
+        int prevActiveTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        int prevTex2D = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
         GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
-                | GL11.GL_VIEWPORT_BIT | GL11.GL_TEXTURE_BIT);
+                | GL11.GL_VIEWPORT_BIT);
         try {
             GL11.glDisable(GL11.GL_DEPTH_TEST);
             GL11.glDepthMask(false);
@@ -180,20 +184,12 @@ public final class SunRaysRenderer {
             GL11.glDisable(GL11.GL_LIGHTING);
             GL11.glDisable(GL11.GL_FOG);
 
-            // 1) copy the scene depth into a sampleable texture
-            main.bindFramebuffer(false);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
-            if (depthW != fw || depthH != fh) {
-                GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL14.GL_DEPTH_COMPONENT24, fw, fh, 0,
-                        GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, (FloatBuffer) null);
-                GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
-                GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
-                GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
-                GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
-                depthW = fw;
-                depthH = fh;
+            // 1) scene depth (shared with ShadowRenderer, copied at most once per frame)
+            if (!SceneDepth.prepare(main)) {
+                return;
             }
-            GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, fw, fh);
+            int depthTex = SceneDepth.texture();
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
 
             // 2) radial blur toward the sun at reduced resolution
             raysFbo.bindFramebuffer(true);
@@ -219,6 +215,8 @@ public final class SunRaysRenderer {
             disable("rendering", t);
         } finally {
             LuxProgram.unbind();
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex2D);
+            GL13.glActiveTexture(prevActiveTexture);
             main.bindFramebuffer(true);
             GL11.glPopAttrib();
         }
@@ -231,9 +229,6 @@ public final class SunRaysRenderer {
             compositeProgram = new LuxProgram("lux_sunrays_composite", VERT, COMPOSITE_FRAG);
             LOGGER.info("Sun rays shaders compiled ({} samples, 1/{} resolution)",
                     LuxConfig.sunRaySamples, LuxConfig.sunRayResolutionDivisor);
-        }
-        if (depthTex == -1) {
-            depthTex = GL11.glGenTextures();
         }
         if (raysFbo == null) {
             raysFbo = new Framebuffer(rw, rh, false);

@@ -1,8 +1,10 @@
 package org.taumc.celeritas.lux;
 
+import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
 
+import java.nio.FloatBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -70,6 +72,17 @@ final class LuxProgram {
     void set1f(String name, float v) { GL20.glUniform1f(loc(name), v); }
     void set2f(String name, float x, float y) { GL20.glUniform2f(loc(name), x, y); }
     void set3f(String name, float x, float y, float z) { GL20.glUniform3f(loc(name), x, y, z); }
+    void set4f(String name, float x, float y, float z, float w) { GL20.glUniform4f(loc(name), x, y, z, w); }
+
+    private static final FloatBuffer MATRIX_BUF = BufferUtils.createFloatBuffer(16);
+
+    /** Uploads a column-major 4x4 matrix (OpenGL memory order). */
+    void setMatrix4(String name, float[] m) {
+        MATRIX_BUF.clear();
+        MATRIX_BUF.put(m);
+        MATRIX_BUF.flip();
+        GL20.glUniformMatrix4(loc(name), false, MATRIX_BUF);
+    }
 
     void delete() {
         GL20.glDeleteProgram(id);
